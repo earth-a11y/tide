@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우리나라 삼면 바다 조위 데이터 시각화 도구</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        body { font-family: 'Pretendard', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-blue-700 via-sky-600 to-indigo-800 text-white shadow-md py-6 px-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                    <span class="bg-white/20 px-3 py-0.5 rounded-full text-xs font-semibold tracking-wider uppercase">고등학교 지구시스템과학</span>
+                    <span class="bg-blue-900/40 px-3 py-0.5 rounded-full text-xs text-sky-200">1개월 시계열 조석 데이터 분석</span>
+                </div>
+                <h1 class="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-water text-cyan-300"></i>
+                    삼면 바다 조위 비교 및 월간 조석 분석 도구
+                </h1>
+                <p class="text-sky-100 text-xs md:text-sm mt-1">1시간 단위 연속 조위 예측 데이터(CSV/텍스트)를 입력하면 조위 곡선을 시각화하고 해역별 비교 분석을 실행합니다.</p>
+            </div>
+            <!-- Quick Actions -->
+            <div class="flex flex-wrap gap-2">
+                <button onclick="loadUserOctoberData()" class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-calendar-check"></i> 10월 1개월(744시간) 데이터 자동 채우기
+                </button>
+                <button onclick="clearAllData()" class="bg-white/10 hover:bg-white/20 text-white font-medium px-4 py-2.5 rounded-xl transition flex items-center gap-2 text-sm backdrop-blur-sm">
+                    <i class="fa-solid fa-rotate-left"></i> 초기화
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+
+        <!-- Input Section -->
+        <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-3 gap-2">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-file-csv text-blue-600"></i>
+                        해역별 조위 데이터 입력 (단순 숫자 또는 [날짜, 예측조위] CSV 형식 지원)
+                    </h2>
+                    <p class="text-xs text-slate-500">국립해양조사원 관측/예측 데이터 원본을 그대로 붙여넣어도 자동으로 수치와 날짜를 추출합니다.</p>
+                </div>
+                <div class="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg">
+                    💡 <span class="font-semibold">포맷 지원:</span> <code class="bg-white px-1 rounded text-blue-600">2026-10-01 00:00, 142</code> 또는 공백/줄바꿈 수치
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <!-- West Sea -->
+                <div class="border border-red-200 bg-red-50/20 rounded-xl p-4 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-base font-bold text-red-600 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+                                서해
+                            </h3>
+                        </div>
+                        <textarea id="westData" rows="6" class="w-full p-2.5 bg-white border border-slate-200 rounded-lg font-mono text-xs focus:ring-2 focus:ring-red-400 focus:outline-none transition custom-scrollbar resize-none" placeholder="시간, 예측 조위&#10;2026-10-01 00:00, 142&#10;2026-10-01 01:00, 137..."></textarea>
+                    </div>
+                    <div id="westStats" class="mt-3 p-2.5 bg-white border border-red-100 rounded-lg text-xs text-red-900 hidden space-y-1 shadow-sm">
+                        <div class="flex justify-between text-slate-600"><span>입력 데이터 개수:</span><strong id="westCount" class="text-slate-800">0개</strong></div>
+                    </div>
+                </div>
+
+                <!-- South Sea -->
+                <div class="border border-emerald-200 bg-emerald-50/20 rounded-xl p-4 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-base font-bold text-emerald-600 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                남해
+                            </h3>
+                        </div>
+                        <textarea id="southData" rows="6" class="w-full p-2.5 bg-white border border-slate-200 rounded-lg font-mono text-xs focus:ring-2 focus:ring-emerald-400 focus:outline-none transition custom-scrollbar resize-none" placeholder="데이터 입력 (수치 또는 CSV)"></textarea>
+                    </div>
+                    <div id="southStats" class="mt-3 p-2.5 bg-white border border-emerald-100 rounded-lg text-xs text-emerald-900 hidden space-y-1 shadow-sm">
+                        <div class="flex justify-between text-slate-600"><span>입력 데이터 개수:</span><strong id="southCount" class="text-slate-800">0개</strong></div>
+                    </div>
+                </div>
+
+                <!-- East Sea -->
+                <div class="border border-sky-200 bg-sky-50/20 rounded-xl p-4 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-base font-bold text-sky-600 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span>
+                                동해
+                            </h3>
+                        </div>
+                        <textarea id="eastData" rows="6" class="w-full p-2.5 bg-white border border-slate-200 rounded-lg font-mono text-xs focus:ring-2 focus:ring-sky-400 focus:outline-none transition custom-scrollbar resize-none" placeholder="데이터 입력 (수치 또는 CSV)"></textarea>
+                    </div>
+                    <div id="eastStats" class="mt-3 p-2.5 bg-white border border-sky-100 rounded-lg text-xs text-sky-900 hidden space-y-1 shadow-sm">
+                        <div class="flex justify-between text-slate-600"><span>입력 데이터 개수:</span><strong id="eastCount" class="text-slate-800">0개</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execution Button -->
+            <div class="pt-2 text-center">
+                <button onclick="renderChart()" class="w-full md:w-auto px-10 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-xl shadow-lg hover:shadow-xl transition transform active:scale-95 flex items-center justify-center gap-2 mx-auto">
+                    <i class="fa-solid fa-chart-line text-lg"></i>
+                    📊 조위 시계열 곡선 시각화 실행
+                </button>
+            </div>
+        </section>
+
+        <!-- Toast Alert -->
+        <div id="toast" class="hidden bg-slate-800 text-white px-5 py-3 rounded-xl text-sm font-medium text-center max-w-md mx-auto shadow-lg transition"></div>
+
+        <!-- Chart Controls & Canvas -->
+        <section class="bg-white rounded-2xl p-5 md:p-6 shadow-sm border border-slate-200 space-y-4">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-100 pb-4">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-area text-blue-600"></i>
+                        해역별 시계열 조위 변화 곡선
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">X축 눈금은 일자별로 자동 정리되어 1달(744시간) 전체 흐름을 한눈에 비교할 수 있습니다.</p>
+                </div>
+
+                <!-- Controls & Filters -->
+                <div class="flex flex-wrap items-center gap-3 text-xs w-full lg:w-auto">
+                    <!-- Range Filter Buttons -->
+                    <div class="bg-slate-100 p-1 rounded-xl flex items-center gap-1 font-medium text-slate-600">
+                        <span class="px-2 text-slate-400 font-semibold">보기 범주:</span>
+                        <button id="btnFilterAll" onclick="setRangeFilter('all')" class="px-2.5 py-1.5 bg-white rounded-lg shadow-sm font-bold text-blue-600">전체 (1달)</button>
+                        <button id="btnFilterW1" onclick="setRangeFilter('w1')" class="px-2 py-1.5 rounded-lg hover:text-slate-900">1주차 (1~7일)</button>
+                        <button id="btnFilterW2" onclick="setRangeFilter('w2')" class="px-2 py-1.5 rounded-lg hover:text-slate-900">2주차 (8~14일)</button>
+                        <button id="btnFilterW3" onclick="setRangeFilter('w3')" class="px-2 py-1.5 rounded-lg hover:text-slate-900">3주차 (15~21일)</button>
+                        <button id="btnFilterW4" onclick="setRangeFilter('w4')" class="px-2 py-1.5 rounded-lg hover:text-slate-900">4주차 (22~28일)</button>
+                    </div>
+
+                    <!-- Line Style -->
+                    <div class="bg-slate-100 p-1 rounded-xl flex items-center gap-1 font-medium text-slate-600">
+                        <button id="btnSmooth" onclick="setTension(0.3)" class="px-2.5 py-1.5 bg-white rounded-lg shadow-sm font-bold text-blue-600">곡선</button>
+                        <button id="btnStraight" onclick="setTension(0)" class="px-2.5 py-1.5 rounded-lg hover:text-slate-900">직선</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas Container -->
+            <div class="relative w-full h-[450px] md:h-[500px]">
+                <canvas id="tideChart"></canvas>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-800 text-slate-400 text-xs py-6 text-center mt-12 border-t border-slate-700">
+        <p>고등학교 지구시스템과학 / 해양학 데이터 탐구 지원 웹 애플리케이션</p>
+        <p class="mt-1 text-slate-500">데이터 출처: 국립해양조사원 바다누리 해양정보 서비스 (KHOA)</p>
+    </footer>
+
+    <script>
+        let chartInstance = null;
+        let lineTension = 0.3;
+        let activeFilter = 'all';
+
+        // Stored parsed datasets
+        let parsedWest = [];
+        let parsedSouth = [];
+        let parsedEast = [];
+
+        // Provided 1-month (October 2026, 744 hours) raw data text from user query
+        const octoberRawDataText = `시간, 예측 조위
+2026-10-01 00:00, 142
+2026-10-01 01:00, 137
+2026-10-01 02:00, 232
+2026-10-01 03:00, 403
+2026-10-01 04:00, 570
+2026-10-01 05:00, 665
+2026-10-01 06:00, 677
+2026-10-01 07:00, 619
+2026-10-01 08:00, 507
+2026-10-01 09:00, 369
+2026-10-01 10:00, 243
+2026-10-01 11:00, 149
+2026-10-01 12:00, 90
+2026-10-01 13:00, 83
+2026-10-01 14:00, 167
+2026-10-01 15:00, 338
+2026-10-01 16:00, 532
+2026-10-01 17:00, 672
+2026-10-01 18:00, 729
+2026-10-01 19:00, 713
+2026-10-01 20:00, 637
+2026-10-01 21:00, 522
+2026-10-01 22:00, 401
+2026-10-01 23:00, 300
+2026-10-02 00:00, 224
+2026-10-02 01:00, 181
+2026-10-02 02:00, 204
+2026-10-02 03:00, 309
+2026-10-02 04:00, 457
+2026-10-02 05:00, 579
+2026-10-02 06:00, 635
+2026-10-02 07:00, 622
+2026-10-02 08:00, 554
+2026-10-02 09:00, 444
+2026-10-02 10:00, 323
+2026-10-02 11:00, 221
+2026-10-02 12:00, 150
+2026-10-02 13:00, 115
+2026-10-02 14:00, 137
+2026-10-02 15:00, 237
+2026-10-02 16:00, 394
+2026-10-02 17:00, 549
+2026-10-02 18:00, 652
+2026-10-02 19:00, 688
+2026-10-02 20:00, 665
+2026-10-02 21:00, 593
+2026-10-02 22:00, 494
+2026-10-02 23:00, 398
+2026-10-03 00:00, 319
+2026-10-03 01:00, 262
+2026-10-03 02:00, 238
+2026-10-03 03:00, 270
+2026-10-03 04:00, 360
+2026-10-03 05:00, 470
+2026-10-03 06:00, 552
+2026-10-03 07:00, 584
+2026-10-03 08:00, 564
+2026-10-03 09:00, 500
+2026-10-03 10:00, 406
+2026-10-03 11:00, 310
+2026-10-03 12:00, 232
+2026-10-03 13:00, 181
+2026-10-03 14:00, 163
+2026-10-03 15:00, 195
+2026-10-03 16:00, 284
+2026-10-03 17:00, 409
+2026-10-03 18:00, 526
+2026-10-03 19:00, 605
+2026-10-03 20:00, 636
+2026-10-03 21:00, 620
+2026-10-03 22:00, 565
+2026-10-03 23:00, 491
+2026-10-04 00:00, 418
+2026-10-04 01:00, 357
+2026-10-04 02:00, 311
+2026-10-04 03:00, 291
+2026-10-04 04:00, 313
+2026-10-04 05:00, 372
+2026-10-04 06:00, 444
+2026-10-04 07:00, 501
+2026-10-04 08:00, 528
+2026-10-04 09:00, 518
+2026-10-04 10:00, 472
+2026-10-04 11:00, 403
+2026-10-04 12:00, 332
+2026-10-04 13:00, 273
+2026-10-04 14:00, 231
+2026-10-04 15:00, 215
+2026-10-04 16:00, 235
+2026-10-04 17:00, 295
+2026-10-04 18:00, 383
+2026-10-04 19:00, 473
+2026-10-04 20:00, 546
+2026-10-04 21:00, 588
+2026-10-04 22:00, 591
+2026-10-04 23:00, 561
+2026-10-05 00:00, 512
+2026-10-05 01:00, 457
+2026-10-05 02:00, 403
+2026-10-05 03:00, 354
+2026-10-05 04:00, 322
+2026-10-05 05:00, 317
+2026-10-05 06:00, 343
+2026-10-05 07:00, 390
+2026-10-05 08:00, 443
+2026-10-05 09:00, 483
+2026-10-05 10:00, 497
+2026-10-05 11:00, 478
+2026-10-05 12:00, 436
+2026-10-05 13:00, 384
+2026-10-05 14:00, 331
+2026-10-05 15:00, 283
+2026-10-05 16:00, 250
+2026-10-05 17:00, 244
+2026-10-05 18:00, 270
+2026-10-05 19:00, 328
+2026-10-05 20:00, 410
+2026-10-05 21:00, 495
+2026-10-05 22:00, 559
+2026-10-05 23:00, 588
+2026-10-06 00:00, 583
+2026-10-06 01:00, 552
+2026-10-06 02:00, 501
+2026-10-06 03:00, 439
+2026-10-06 04:00, 373
+2026-10-06 05:00, 317
+2026-10-06 06:00, 284
+2026-10-06 07:00, 285
+2026-10-06 08:00, 326
+2026-10-06 09:00, 395
+2026-10-06 10:00, 464
+2026-10-06 11:00, 508
+2026-10-06 12:00, 518
+2026-10-06 13:00, 496
+2026-10-06 14:00, 449
+2026-10-06 15:00, 385
+2026-10-06 16:00, 317
+2026-10-06 17:00, 258
+2026-10-06 18:00, 221
+2026-10-06 19:00, 219
+2026-10-06 20:00, 266
+2026-10-06 21:00, 357
+2026-10-06 22:00, 466
+2026-10-06 23:00, 559
+2026-10-07 00:00, 612
+2026-10-07 01:00, 622
+2026-10-07 02:00, 594
+2026-10-07 03:00, 531
+2026-10-07 04:00, 447
+2026-10-07 05:00, 358
+2026-10-07 06:00, 278
+2026-10-07 07:00, 223
+2026-10-07 08:00, 217
+2026-10-07 09:00, 273
+2026-10-07 10:00, 374
+2026-10-07 11:00, 478
+2026-10-07 12:00, 551
+2026-10-07 13:00, 580
+2026-10-07 14:00, 562
+2026-10-07 15:00, 504
+2026-10-07 16:00, 417
+2026-10-07 17:00, 323
+2026-10-07 18:00, 239
+2026-10-07 19:00, 178
+2026-10-07 20:00, 163
+2026-10-07 21:00, 215
+2026-10-07 22:00, 332
+2026-10-07 23:00, 472
+2026-10-08 00:00, 587
+2026-10-08 01:00, 652
+2026-10-08 02:00, 662
+2026-10-08 03:00, 619
+2026-10-08 04:00, 531
+2026-10-08 05:00, 422
+2026-10-08 06:00, 312
+2026-10-08 07:00, 216
+2026-10-08 08:00, 155
+2026-10-08 09:00, 161
+2026-10-08 10:00, 249
+2026-10-08 11:00, 389
+2026-10-08 12:00, 525
+2026-10-08 13:00, 614
+2026-10-08 14:00, 645
+2026-10-08 15:00, 615
+2026-10-08 16:00, 532
+2026-10-08 17:00, 418
+2026-10-08 18:00, 303
+2026-10-08 19:00, 203
+2026-10-08 20:00, 130
+2026-10-08 21:00, 118
+2026-10-08 22:00, 194
+2026-10-08 23:00, 345
+2026-10-09 00:00, 509
+2026-10-09 01:00, 633
+2026-10-09 02:00, 692
+2026-10-09 03:00, 684
+2026-10-09 04:00, 612
+2026-10-09 05:00, 496
+2026-10-09 06:00, 368
+2026-10-09 07:00, 249
+2026-10-09 08:00, 149
+2026-10-09 09:00, 97
+2026-10-09 10:00, 134
+2026-10-09 11:00, 266
+2026-10-09 12:00, 441
+2026-10-09 13:00, 591
+2026-10-09 14:00, 678
+2026-10-09 15:00, 693
+2026-10-09 16:00, 637
+2026-10-09 17:00, 525
+2026-10-09 18:00, 392
+2026-10-09 19:00, 268
+2026-10-09 20:00, 161
+2026-10-09 21:00, 91
+2026-10-09 22:00, 100
+2026-10-09 23:00, 214
+2026-10-10 00:00, 394
+2026-10-10 01:00, 567
+2026-10-10 02:00, 679
+2026-10-10 03:00, 715
+2026-10-10 04:00, 675
+2026-10-10 05:00, 570
+2026-10-10 06:00, 433
+2026-10-10 07:00, 299
+2026-10-10 08:00, 182
+2026-10-10 09:00, 91
+2026-10-10 10:00, 66
+2026-10-10 11:00, 149
+2026-10-10 12:00, 324
+2026-10-10 13:00, 517
+2026-10-10 14:00, 659
+2026-10-10 15:00, 725
+2026-10-10 16:00, 711
+2026-10-10 17:00, 623
+2026-10-10 18:00, 489
+2026-10-10 19:00, 349
+2026-10-10 20:00, 227
+2026-10-10 21:00, 125
+2026-10-10 22:00, 73
+2026-10-10 23:00, 119
+2026-10-11 00:00, 271
+2026-10-11 01:00, 467
+2026-10-11 02:00, 625
+2026-10-11 03:00, 707
+2026-10-11 04:00, 708
+2026-10-11 05:00, 632
+2026-10-11 06:00, 501
+2026-10-11 07:00, 356
+2026-10-11 08:00, 229
+2026-10-11 09:00, 123
+2026-10-11 10:00, 55
+2026-10-11 11:00, 74
+2026-10-11 12:00, 207
+2026-10-11 13:00, 410
+2026-10-11 14:00, 596
+2026-10-11 15:00, 712
+2026-10-11 16:00, 744
+2026-10-11 17:00, 695
+2026-10-11 18:00, 580
+2026-10-11 19:00, 436
+2026-10-11 20:00, 303
+2026-10-11 21:00, 189
+2026-10-11 22:00, 102
+2026-10-11 23:00, 84
+2026-10-12 00:00, 175
+2026-10-12 01:00, 354
+2026-10-12 02:00, 541
+2026-10-12 03:00, 666
+2026-10-12 04:00, 709
+2026-10-12 05:00, 671
+2026-10-12 06:00, 563
+2026-10-12 07:00, 419
+2026-10-12 08:00, 281
+2026-10-12 09:00, 168
+2026-10-12 10:00, 82
+2026-10-12 11:00, 52
+2026-10-12 12:00, 125
+2026-10-12 13:00, 298
+2026-10-12 14:00, 504
+2026-10-12 15:00, 662
+2026-10-12 16:00, 739
+2026-10-12 17:00, 734
+2026-10-12 18:00, 652
+2026-10-12 19:00, 521
+2026-10-12 20:00, 381
+2026-10-12 21:00, 260
+2026-10-12 22:00, 161
+2026-10-12 23:00, 101
+2026-10-13 00:00, 128
+2026-10-13 01:00, 258
+2026-10-13 02:00, 442
+2026-10-13 03:00, 598
+2026-10-13 04:00, 680
+2026-10-13 05:00, 682
+2026-10-13 06:00, 609
+2026-10-13 07:00, 481
+2026-10-13 08:00, 339
+2026-10-13 09:00, 217
+2026-10-13 10:00, 124
+2026-10-13 11:00, 68
+2026-10-13 12:00, 87
+2026-10-13 13:00, 209
+2026-10-13 14:00, 401
+2026-10-13 15:00, 584
+2026-10-13 16:00, 701
+2026-10-13 17:00, 738
+2026-10-13 18:00, 697
+2026-10-13 19:00, 594
+2026-10-13 20:00, 459
+2026-10-13 21:00, 332
+2026-10-13 22:00, 227
+2026-10-13 23:00, 149
+2026-10-14 00:00, 128
+2026-10-14 01:00, 199
+2026-10-14 02:00, 350
+2026-10-14 03:00, 513
+2026-10-14 04:00, 626
+2026-10-14 05:00, 665
+2026-10-14 06:00, 631
+2026-10-14 07:00, 533
+2026-10-14 08:00, 400
+2026-10-14 09:00, 271
+2026-10-14 10:00, 170
+2026-10-14 11:00, 101
+2026-10-14 12:00, 86
+2026-10-14 13:00, 156
+2026-10-14 14:00, 309
+2026-10-14 15:00, 491
+2026-10-14 16:00, 636
+2026-10-14 17:00, 710
+2026-10-14 18:00, 711
+2026-10-14 19:00, 645
+2026-10-14 20:00, 531
+2026-10-14 21:00, 406
+2026-10-14 22:00, 296
+2026-10-14 23:00, 210
+2026-10-15 00:00, 162
+2026-10-15 01:00, 183
+2026-10-15 02:00, 284
+2026-10-15 03:00, 429
+2026-10-15 04:00, 555
+2026-10-15 05:00, 624
+2026-10-15 06:00, 626
+2026-10-15 07:00, 566
+2026-10-15 08:00, 457
+2026-10-15 09:00, 332
+2026-10-15 10:00, 223
+2026-10-15 11:00, 145
+2026-10-15 12:00, 108
+2026-10-15 13:00, 136
+2026-10-15 14:00, 243
+2026-10-15 15:00, 401
+2026-10-15 16:00, 552
+2026-10-15 17:00, 654
+2026-10-15 18:00, 691
+2026-10-15 19:00, 666
+2026-10-15 20:00, 586
+2026-10-15 21:00, 476
+2026-10-15 22:00, 367
+2026-10-15 23:00, 277
+2026-10-16 00:00, 215
+2026-10-16 01:00, 200
+2026-10-16 02:00, 253
+2026-10-16 03:00, 361
+2026-10-16 04:00, 479
+2026-10-16 05:00, 563
+2026-10-16 06:00, 595
+2026-10-16 07:00, 573
+2026-10-16 08:00, 499
+2026-10-16 09:00, 393
+2026-10-16 10:00, 285
+2026-10-16 11:00, 199
+2026-10-16 12:00, 147
+2026-10-16 13:00, 144
+2026-10-16 14:00, 206
+2026-10-16 15:00, 326
+2026-10-16 16:00, 464
+2026-10-16 17:00, 576
+2026-10-16 18:00, 641
+2026-10-16 19:00, 652
+2026-10-16 20:00, 612
+2026-10-16 21:00, 531
+2026-10-16 22:00, 436
+2026-10-16 23:00, 347
+2026-10-17 00:00, 279
+2026-10-17 01:00, 243
+2026-10-17 02:00, 256
+2026-10-17 03:00, 321
+2026-10-17 04:00, 413
+2026-10-17 05:00, 495
+2026-10-17 06:00, 544
+2026-10-17 07:00, 551
+2026-10-17 08:00, 515
+2026-10-17 09:00, 441
+2026-10-17 10:00, 349
+2026-10-17 11:00, 263
+2026-10-17 12:00, 202
+2026-10-17 13:00, 176
+2026-10-17 14:00, 199
+2026-10-17 15:00, 275
+2026-10-17 16:00, 384
+2026-10-17 17:00, 489
+2026-10-17 18:00, 567
+2026-10-17 19:00, 606
+2026-10-17 20:00, 604
+2026-10-17 21:00, 561
+2026-10-17 22:00, 492
+2026-10-17 23:00, 416
+2026-10-18 00:00, 349
+2026-10-18 01:00, 301
+2026-10-18 02:00, 285
+2026-10-18 03:00, 309
+2026-10-18 04:00, 366
+2026-10-18 05:00, 430
+2026-10-18 06:00, 481
+2026-10-18 07:00, 508
+2026-10-18 08:00, 504
+2026-10-18 09:00, 468
+2026-10-18 10:00, 404
+2026-10-18 11:00, 332
+2026-10-18 12:00, 270
+2026-10-18 13:00, 229
+2026-10-18 14:00, 221
+2026-10-18 15:00, 254
+2026-10-18 16:00, 322
+2026-10-18 17:00, 406
+2026-10-18 18:00, 480
+2026-10-18 19:00, 535
+2026-10-18 20:00, 563
+2026-10-18 21:00, 560
+2026-10-18 22:00, 526
+2026-10-18 23:00, 473
+2026-10-19 00:00, 418
+2026-10-19 01:00, 368
+2026-10-19 02:00, 333
+2026-10-19 03:00, 323
+2026-10-19 04:00, 341
+2026-10-19 05:00, 377
+2026-10-19 06:00, 416
+2026-10-19 07:00, 449
+2026-10-19 08:00, 469
+2026-10-19 09:00, 469
+2026-10-19 10:00, 442
+2026-10-19 11:00, 396
+2026-10-19 12:00, 345
+2026-10-19 13:00, 300
+2026-10-19 14:00, 269
+2026-10-19 15:00, 264
+2026-10-19 16:00, 288
+2026-10-19 17:00, 336
+2026-10-19 18:00, 393
+2026-10-19 19:00, 449
+2026-10-19 20:00, 497
+2026-10-19 21:00, 528
+2026-10-19 22:00, 534
+2026-10-19 23:00, 515
+2026-10-20 00:00, 479
+2026-10-20 01:00, 436
+2026-10-20 02:00, 392
+2026-10-20 03:00, 357
+2026-10-20 04:00, 338
+2026-10-20 05:00, 339
+2026-10-20 06:00, 356
+2026-10-20 07:00, 382
+2026-10-20 08:00, 414
+2026-10-20 09:00, 444
+2026-10-20 10:00, 458
+2026-10-20 11:00, 448
+2026-10-20 12:00, 419
+2026-10-20 13:00, 380
+2026-10-20 14:00, 339
+2026-10-20 15:00, 304
+2026-10-20 16:00, 286
+2026-10-20 17:00, 292
+2026-10-20 18:00, 318
+2026-10-20 19:00, 359
+2026-10-20 20:00, 412
+2026-10-20 21:00, 469
+2026-10-20 22:00, 515
+2026-10-20 23:00, 535
+2026-10-21 00:00, 528
+2026-10-21 01:00, 500
+2026-10-21 02:00, 457
+2026-10-21 03:00, 405
+2026-10-21 04:00, 356
+2026-10-21 05:00, 321
+2026-10-21 06:00, 306
+2026-10-21 07:00, 312
+2026-10-21 08:00, 343
+2026-10-21 09:00, 393
+2026-10-21 10:00, 445
+2026-10-21 11:00, 479
+2026-10-21 12:00, 484
+2026-10-21 13:00, 463
+2026-10-21 14:00, 422
+2026-10-21 15:00, 369
+2026-10-21 16:00, 317
+2026-10-21 17:00, 280
+2026-10-21 18:00, 265
+2026-10-21 19:00, 277
+2026-10-21 20:00, 318
+2026-10-21 21:00, 387
+2026-10-21 22:00, 466
+2026-10-21 23:00, 530
+2026-10-22 00:00, 561
+2026-10-22 01:00, 558
+2026-10-22 02:00, 523
+2026-10-22 03:00, 464
+2026-10-22 04:00, 391
+2026-10-22 05:00, 324
+2026-10-22 06:00, 274
+2026-10-22 07:00, 251
+2026-10-22 08:00, 264
+2026-10-22 09:00, 318
+2026-10-22 10:00, 401
+2026-10-22 11:00, 480
+2026-10-22 12:00, 530
+2026-10-22 13:00, 540
+2026-10-22 14:00, 513
+2026-10-22 15:00, 454
+2026-10-22 16:00, 378
+2026-10-22 17:00, 303
+2026-10-22 18:00, 247
+2026-10-22 19:00, 219
+2026-10-22 20:00, 230
+2026-10-22 21:00, 289
+2026-10-22 22:00, 387
+2026-10-22 23:00, 493
+2026-10-23 00:00, 570
+2026-10-23 01:00, 602
+2026-10-23 02:00, 587
+2026-10-23 03:00, 530
+2026-10-23 04:00, 443
+2026-10-23 05:00, 348
+2026-10-23 06:00, 266
+2026-10-23 07:00, 209
+2026-10-23 08:00, 191
+2026-10-23 09:00, 228
+2026-10-23 10:00, 323
+2026-10-23 11:00, 443
+2026-10-23 12:00, 545
+2026-10-23 13:00, 598
+2026-10-23 14:00, 599
+2026-10-23 15:00, 551
+2026-10-23 16:00, 463
+2026-10-23 17:00, 360
+2026-10-23 18:00, 267
+2026-10-23 19:00, 200
+2026-10-23 20:00, 169
+2026-10-23 21:00, 193
+2026-10-23 22:00, 284
+2026-10-23 23:00, 419
+2026-10-24 00:00, 546
+2026-10-24 01:00, 623
+2026-10-24 02:00, 640
+2026-10-24 03:00, 600
+2026-10-24 04:00, 511
+2026-10-24 05:00, 395
+2026-10-24 06:00, 284
+2026-10-24 07:00, 196
+2026-10-24 08:00, 142
+2026-10-24 09:00, 142
+2026-10-24 10:00, 219
+2026-10-24 11:00, 361
+2026-10-24 12:00, 514
+2026-10-24 13:00, 624
+2026-10-24 14:00, 667
+2026-10-24 15:00, 645
+2026-10-24 16:00, 564
+2026-10-24 17:00, 446
+2026-10-24 18:00, 324
+2026-10-24 19:00, 223
+2026-10-24 20:00, 151
+2026-10-24 21:00, 126
+2026-10-24 22:00, 178
+2026-10-24 23:00, 311
+2026-10-25 00:00, 477
+2026-10-25 01:00, 608
+2026-10-25 02:00, 670
+2026-10-25 03:00, 660
+2026-10-25 04:00, 586
+2026-10-25 05:00, 464
+2026-10-25 06:00, 329
+2026-10-25 07:00, 213
+2026-10-25 08:00, 128
+2026-10-25 09:00, 85
+2026-10-25 10:00, 117
+2026-10-25 11:00, 245
+2026-10-25 12:00, 431
+2026-10-25 13:00, 600
+2026-10-25 14:00, 699
+2026-10-25 15:00, 718
+2026-10-25 16:00, 665
+2026-10-25 17:00, 552
+2026-10-25 18:00, 412
+2026-10-25 19:00, 283
+2026-10-25 20:00, 180
+2026-10-25 21:00, 111
+2026-10-25 22:00, 103
+2026-10-25 23:00, 194
+2026-10-26 00:00, 366
+2026-10-26 01:00, 545
+2026-10-26 02:00, 662
+2026-10-26 03:00, 695
+2026-10-26 04:00, 652
+2026-10-26 05:00, 544
+2026-10-26 06:00, 399
+2026-10-26 07:00, 259
+2026-10-26 08:00, 148
+2026-10-26 09:00, 72
+2026-10-26 10:00, 51
+2026-10-26 11:00, 126
+2026-10-26 12:00, 304
+2026-10-26 13:00, 516
+2026-10-26 14:00, 679
+2026-10-26 15:00, 753
+2026-10-26 16:00, 742
+2026-10-26 17:00, 657
+2026-10-26 18:00, 520
+2026-10-26 19:00, 373
+2026-10-26 20:00, 246
+2026-10-26 21:00, 147
+2026-10-26 22:00, 86
+2026-10-26 23:00, 108
+2026-10-27 00:00, 239
+2026-10-27 01:00, 435
+2026-10-27 02:00, 605
+2026-10-27 03:00, 693
+2026-10-27 04:00, 692
+2026-10-27 05:00, 617
+2026-10-27 06:00, 483
+2026-10-27 07:00, 329
+2026-10-27 08:00, 197
+2026-10-27 09:00, 97
+2026-10-27 10:00, 35
+2026-10-27 11:00, 46
+2026-10-27 12:00, 170
+2026-10-27 13:00, 384
+2026-10-27 14:00, 599
+2026-10-27 15:00, 737
+2026-10-27 16:00, 779
+2026-10-27 17:00, 738
+2026-10-27 18:00, 629
+2026-10-27 19:00, 481
+2026-10-27 20:00, 338
+2026-10-27 21:00, 220
+2026-10-27 22:00, 128
+2026-10-27 23:00, 85
+2026-10-28 00:00, 141
+2026-10-28 01:00, 304
+2026-10-28 02:00, 501
+2026-10-28 03:00, 644
+2026-10-28 04:00, 695
+2026-10-28 05:00, 663
+2026-10-28 06:00, 562
+2026-10-28 07:00, 416
+2026-10-28 08:00, 268
+2026-10-28 09:00, 150
+2026-10-28 10:00, 64
+2026-10-28 11:00, 24
+2026-10-28 12:00, 74
+2026-10-28 13:00, 238
+2026-10-28 14:00, 465
+2026-10-28 15:00, 659
+2026-10-28 16:00, 764
+2026-10-28 17:00, 776
+2026-10-28 18:00, 711
+2026-10-28 19:00, 589
+2026-10-28 20:00, 444
+2026-10-28 21:00, 314
+2026-10-28 22:00, 206
+2026-10-28 23:00, 126
+2026-10-29 00:00, 109
+2026-10-29 01:00, 198
+2026-10-29 02:00, 372
+2026-10-29 03:00, 549
+2026-10-29 04:00, 654
+2026-10-29 05:00, 673
+2026-10-29 06:00, 617
+2026-10-29 07:00, 501
+2026-10-29 08:00, 357
+2026-10-29 09:00, 223
+2026-10-29 10:00, 121
+2026-10-29 11:00, 53
+2026-10-29 12:00, 41
+2026-10-29 13:00, 127
+2026-10-29 14:00, 313
+2026-10-29 15:00, 528
+2026-10-29 16:00, 688
+2026-10-29 17:00, 760
+2026-10-29 18:00, 749
+2026-10-29 19:00, 671
+2026-10-29 20:00, 548
+2026-10-29 21:00, 415
+2026-10-29 22:00, 300
+2026-10-29 23:00, 206
+2026-10-30 00:00, 143
+2026-10-30 01:00, 153
+2026-10-30 02:00, 261
+2026-10-30 03:00, 426
+2026-10-30 04:00, 569
+2026-10-30 05:00, 639
+2026-10-30 06:00, 633
+2026-10-30 07:00, 563
+2026-10-30 08:00, 446
+2026-10-30 09:00, 313
+2026-10-30 10:00, 199
+2026-10-30 11:00, 115
+2026-10-30 12:00, 67
+2026-10-30 13:00, 83
+2026-10-30 14:00, 192
+2026-10-30 15:00, 375
+2026-10-30 16:00, 560
+2026-10-30 17:00, 685
+2026-10-30 18:00, 731
+2026-10-30 19:00, 707
+2026-10-30 20:00, 627
+2026-10-30 21:00, 513
+2026-10-30 22:00, 398
+2026-10-30 23:00, 300
+2026-10-31 00:00, 220
+2026-10-31 01:00, 178
+2026-10-31 02:00, 207
+2026-10-31 03:00, 314
+2026-10-31 04:00, 453
+2026-10-31 05:00, 560
+2026-10-31 06:00, 605
+2026-10-31 07:00, 587
+2026-10-31 08:00, 515
+2026-10-31 09:00, 407
+2026-10-31 10:00, 292
+2026-10-31 11:00, 198
+2026-10-31 12:00, 132
+2026-10-31 13:00, 103
+2026-10-31 14:00, 138
+2026-10-31 15:00, 250
+2026-10-31 16:00, 410
+2026-10-31 17:00, 559
+2026-10-31 18:00, 655
+2026-10-31 19:00, 687
+2026-10-31 20:00, 661
+2026-10-31 21:00, 587
+2026-10-31 22:00, 490
+2026-10-31 23:00, 395`;
+
+        // Smart CSV & Number Parser
+        function parseInput(id) {
+            const raw = document.getElementById(id).value.trim();
+            if (!raw) return [];
+
+            const lines = raw.split(/\r?\n/);
+            const parsed = [];
+
+            lines.forEach((line, idx) => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+
+                // Skip header line if present
+                if (trimmed.includes('시간') || trimmed.includes('예측') || trimmed.includes('time') || trimmed.includes('tide')) {
+                    return;
+                }
+
+                // Split by comma, tab, or space
+                let parts = trimmed.split(/,|\t/);
+                if (parts.length >= 2) {
+                    const timeStr = parts[0].trim();
+                    const val = parseFloat(parts[1].trim());
+                    if (!isNaN(val)) {
+                        parsed.push({ time: timeStr, value: val });
+                    }
+                } else {
+                    // Fallback to space separated tokens or pure numbers
+                    const tokens = trimmed.split(/\s+/);
+                    if (tokens.length >= 2 && tokens[0].includes('-')) {
+                        // Date + Time format split by space: "2026-10-01 00:00 142"
+                        const timeStr = tokens[0] + ' ' + tokens[1];
+                        const val = parseFloat(tokens[2]);
+                        if (!isNaN(val)) parsed.push({ time: timeStr, value: val });
+                    } else {
+                        // Pure numeric values list
+                        tokens.forEach(tok => {
+                            const val = parseFloat(tok);
+                            if (!isNaN(val)) {
+                                parsed.push({ time: null, value: val });
+                            }
+                        });
+                    }
+                }
+            });
+
+            return parsed;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3500);
+        }
+
+        function setTension(val) {
+            lineTension = val;
+            document.getElementById('btnSmooth').className = val === 0.3 ? "px-2.5 py-1.5 bg-white rounded-lg shadow-sm font-bold text-blue-600" : "px-2.5 py-1.5 rounded-lg hover:text-slate-900";
+            document.getElementById('btnStraight').className = val === 0 ? "px-2.5 py-1.5 bg-white rounded-lg shadow-sm font-bold text-blue-600" : "px-2.5 py-1.5 rounded-lg hover:text-slate-900";
+            if (chartInstance) {
+                renderChart(false);
+            }
+        }
+
+        function setRangeFilter(filter) {
+            activeFilter = filter;
+            const btnIds = ['btnFilterAll', 'btnFilterW1', 'btnFilterW2', 'btnFilterW3', 'btnFilterW4'];
+            btnIds.forEach(id => {
+                const btn = document.getElementById(id);
+                if (id === 'btnFilter' + filter.toUpperCase() || (filter === 'all' && id === 'btnFilterAll')) {
+                    btn.className = "px-2.5 py-1.5 bg-white rounded-lg shadow-sm font-bold text-blue-600";
+                } else {
+                    btn.className = "px-2 py-1.5 rounded-lg hover:text-slate-900";
+                }
+            });
+
+            if (chartInstance) {
+                renderChart(false);
+            }
+        }
+
+        function updateStats(prefix, items) {
+            const statsBox = document.getElementById(prefix + 'Stats');
+            if (items.length === 0) {
+                statsBox.classList.add('hidden');
+                return;
+            }
+
+            document.getElementById(prefix + 'Count').innerText = `${items.length}시간`;
+            statsBox.classList.remove('hidden');
+        }
+
+        function renderChart(notify = true) {
+            parsedWest = parseInput('westData');
+            parsedSouth = parseInput('southData');
+            parsedEast = parseInput('eastData');
+
+            if (parsedWest.length === 0 && parsedSouth.length === 0 && parsedEast.length === 0) {
+                if (notify) showToast('❌ 최소 하나의 해역에 데이터를 입력하거나 10월 채우기 버튼을 눌러주세요.');
+                return;
+            }
+
+            updateStats('west', parsedWest);
+            updateStats('south', parsedSouth);
+            updateStats('east', parsedEast);
+
+            const mainDataset = parsedWest.length > 0 ? parsedWest : (parsedSouth.length > 0 ? parsedSouth : parsedEast);
+
+            // Filter data according to week selection
+            let sliceStart = 0;
+            let sliceEnd = mainDataset.length;
+
+            if (activeFilter === 'w1') { sliceStart = 0; sliceEnd = 168; } // Days 1-7
+            else if (activeFilter === 'w2') { sliceStart = 168; sliceEnd = 336; } // Days 8-14
+            else if (activeFilter === 'w3') { sliceStart = 336; sliceEnd = 504; } // Days 15-21
+            else if (activeFilter === 'w4') { sliceStart = 504; sliceEnd = 672; } // Days 22-28
+
+            const filteredWest = parsedWest.slice(sliceStart, sliceEnd);
+            const filteredSouth = parsedSouth.slice(sliceStart, sliceEnd);
+            const filteredEast = parsedEast.slice(sliceStart, sliceEnd);
+            const targetFiltered = mainDataset.slice(sliceStart, sliceEnd);
+
+            // Generate X labels (Formatted Dates or Time strings)
+            const labels = targetFiltered.map((item, idx) => {
+                const globalIdx = sliceStart + idx;
+                if (item.time) {
+                    // "2026-10-01 00:00" -> "10/01 00시"
+                    const parts = item.time.split(' ');
+                    const dateParts = parts[0].split('-');
+                    const hour = parts[1] ? parts[1].split(':')[0] + '시' : '';
+                    return `${dateParts[1]}/${dateParts[2]} ${hour}`;
+                } else {
+                    const day = Math.floor(globalIdx / 24) + 1;
+                    const hour = globalIdx % 24;
+                    return `${day}일 ${hour}시`;
+                }
+            });
+
+            const ctx = document.getElementById('tideChart').getContext('2d');
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            const datasets = [];
+
+            if (filteredWest.length > 0) {
+                datasets.push({
+                    label: '서해',
+                    data: filteredWest.map(d => d.value),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    borderWidth: 2,
+                    pointRadius: targetFiltered.length > 200 ? 0 : 2,
+                    pointHoverRadius: 5,
+                    tension: lineTension,
+                    fill: false
+                });
+            }
+
+            if (filteredSouth.length > 0) {
+                datasets.push({
+                    label: '남해',
+                    data: filteredSouth.map(d => d.value),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    borderWidth: 2,
+                    pointRadius: targetFiltered.length > 200 ? 0 : 2,
+                    pointHoverRadius: 5,
+                    tension: lineTension,
+                    fill: false
+                });
+            }
+
+            if (filteredEast.length > 0) {
+                datasets.push({
+                    label: '동해',
+                    data: filteredEast.map(d => d.value),
+                    borderColor: '#0284c7',
+                    backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                    borderWidth: 2,
+                    pointRadius: targetFiltered.length > 200 ? 0 : 2,
+                    pointHoverRadius: 5,
+                    tension: lineTension,
+                    fill: false
+                });
+            }
+
+            // Create Chart
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: { family: 'Pretendard', size: 13, weight: '600' },
+                                usePointStyle: true,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleFont: { family: 'Pretendard', size: 12 },
+                            bodyFont: { family: 'Pretendard', size: 13 },
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: {
+                                title: function(items) {
+                                    if (!items.length) return '';
+                                    const index = items[0].dataIndex;
+                                    const rawObj = targetFiltered[index];
+                                    return rawObj && rawObj.time ? `🕒 ${rawObj.time}` : items[0].label;
+                                },
+                                label: function(context) {
+                                    return ` ${context.dataset.label}: ${context.raw} cm`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '관측 시각 (일자 및 시간)',
+                                font: { family: 'Pretendard', size: 12, weight: 'bold' }
+                            },
+                            ticks: {
+                                maxTicksLimit: activeFilter === 'all' ? 31 : 14,
+                                font: { family: 'Pretendard', size: 11 }
+                            },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: '조위 (cm)',
+                                font: { family: 'Pretendard', size: 12, weight: 'bold' }
+                            },
+                            beginAtZero: true,
+                            grid: { color: '#e2e8f0' }
+                        }
+                    }
+                }
+            });
+
+            if (notify) showToast('✅ 1개월 조위 시계열 곡선 시각화가 완료되었습니다.');
+        }
+
+        function loadUserOctoberData() {
+            document.getElementById('westData').value = octoberRawDataText;
+            document.getElementById('southData').value = "";
+            document.getElementById('eastData').value = "";
+
+            setRangeFilter('all');
+            renderChart(false);
+            showToast('✨ 서해 2026년 10월 1개월(744시간) 조위 예측 데이터가 채워졌습니다!');
+        }
+
+        function clearAllData() {
+            document.getElementById('westData').value = "";
+            document.getElementById('southData').value = "";
+            document.getElementById('eastData').value = "";
+            document.getElementById('westStats').classList.add('hidden');
+            document.getElementById('southStats').classList.add('hidden');
+            document.getElementById('eastStats').classList.add('hidden');
+            
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+            showToast('🔄 모든 데이터가 초기화되었습니다.');
+        }
+
+        window.onload = function() {
+            loadUserOctoberData();
+        }
+    </script>
+</body>
+</html>
